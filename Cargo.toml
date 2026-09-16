@@ -14,4 +14,32 @@ categories = ["wasm", "compression"]
 [dependencies]
 # The released kernel, consumed from crates.io — the SAME version the hosts use,
 # so a host links exactly one `ikigai-core` (no duplicate-crate type mismatch).
+# 0.1.37 is the true minimum: the ArgSpec era (`class` / `one_of` /
+# `default_value`, which every endpoint here authors). The transreptor half is
+# older still — `Description::transreptor` landed in 0.1.22 and
+# `Kernel::select_transreptor` in 0.1.23 — so the ArgSpecs set the floor.
+# ⚠ MEASURED, not assumed: a scratch crate pinning `ikigai-core = "=0.1.37"` over
+# this one compiles. Re-check when this pin moves — the dev-dependencies below
+# resolve a much newer core, so the test suite never exercises the floor.
 ikigai-core = "0.1.37"
+# The compression backend. `rust_backend` (miniz_oxide) with default features OFF:
+# pure Rust, no C toolchain, and it compiles to wasm32-unknown-unknown. The
+# default feature set pulls a C/zlib backend — a machine dependency this ecosystem
+# has already been bitten by (an Xcode licence lapse took out `cc` on both machines
+# this month), and one a wasm face cannot have at all.
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+
+[dev-dependencies]
+futures = "0.3"
+# The module recipe as one test (`tests/conformance.rs`): walks every bound
+# endpoint and reports every violation at once.
+ikigai-conformance = "0.3.0"
+# ★ The REPL engine, for `tests/pipeline.rs`. This module's whole point is
+# `source urn:file:x | urn:compress:gzip`, and the routing rule that makes that work
+# (a Source fills the ONE declared argument left unnamed) lives in the engine, not
+# the kernel — so a kernel-only test cannot see it. Neither can the conformance
+# suite, which also calls the kernel and names `content` explicitly.
+ikigai-engine = "0.1.23"
+# The engine reads each contract as `Meta as=application/json`; the test kernel has
+# to be able to answer, or the engine fails open and the pipeline tests prove nothing.
+serde_json = "1"
