@@ -1,7 +1,7 @@
 //! The module recipe as one test: `ikigai-conformance` walks every endpoint
 //! `ikigai_compress::space()` binds and reports every violation at once.
 //!
-//! Two declarations, and one honest opt-out.
+//! Two declarations, one honest opt-out, and the space's name.
 //!
 //! - `pure` — the compressors read nothing but their inline arguments (no file,
 //!   network, clock or platform read), so a cacheable result with an empty
@@ -20,6 +20,9 @@
 //!   whose input is binary. The description-only checks (ARGSPECS, NAMES,
 //!   PIPELINE, REQUIRES-VERB) still run on them; `tests/pipeline.rs` and the unit
 //!   tests cover the rest end to end.
+//! - `space()` is **self-named** `urn:iki:space:compress`: it takes no
+//!   parameters and reads nothing while it is built, so every call holds the
+//!   same doors and the name is a true claim.
 
 use ikigai_conformance::{Fixture, Suite};
 use ikigai_core::{Kernel, Verb};
@@ -58,8 +61,14 @@ fn conforms() {
         );
     }
 
-    let report = suite.run_blocking(&kernel);
+    let report = suite
+        .self_named_space("compress", ikigai_compress::space)
+        .run_blocking(&kernel);
     assert!(report.is_clean(), "{report}");
+    assert_eq!(
+        ikigai_core::space_iri("compress").as_str(),
+        ikigai_compress::SPACE_ID
+    );
 
     // The walk saw exactly the endpoints declared above. A fifth binding without a
     // declaration would be held to a weaker standard (the suite cannot know which

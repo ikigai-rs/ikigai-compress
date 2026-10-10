@@ -18,6 +18,8 @@ only on the published `ikigai-core` kernel and a pure-Rust backend
 (`flate2`/`miniz_oxide` — no C toolchain, no `cc`), uses no OS or platform APIs,
 and compiles to `wasm32-unknown-unknown`.
 
+The space names itself `urn:iki:space:compress` (`ikigai_compress::SPACE_ID`).
+
 ## Two shapes, because compression has two
 
 **Explicit endpoints**, for a caller that means to compress:
