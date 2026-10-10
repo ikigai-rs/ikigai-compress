@@ -78,7 +78,7 @@ use flate2::read::{MultiGzDecoder, ZlibDecoder};
 use flate2::write::ZlibEncoder;
 use flate2::{Compression, GzBuilder};
 use ikigai_core::{
-    ArgSpec, Description, EndpointSpace, Error, Exact, FnEndpoint, Invocation, ReprType,
+    space_iri, ArgSpec, Description, EndpointSpace, Error, Exact, FnEndpoint, Invocation, ReprType,
     Representation, Result, Verb,
 };
 
@@ -401,11 +401,17 @@ pub fn decompress_zlib() -> FnEndpoint {
     .with_description(decompress_description("decompress-zlib", "zlib", ZLIB))
 }
 
-/// The module's space: `urn:compress:*` and `urn:decompress:*`.
+/// The name [`space`] claims: `urn:iki:space:compress`.
+pub const SPACE_ID: &str = "urn:iki:space:compress";
+
+/// The module's space: `urn:compress:*` and `urn:decompress:*`, named
+/// [`SPACE_ID`].
 ///
-/// A host mounts this. The namespace is `urn:{verb}:{algorithm}`, so a second
-/// algorithm is one more pair of bindings and one more line in
-/// [`PAYLOAD_TYPES`]'s neighbours — never a reshuffle.
+/// A host mounts this. It is configuration-free (no parameters, nothing read
+/// while building it), so it names itself: every call holds the same doors.
+/// The namespace is `urn:{verb}:{algorithm}`, so a second algorithm is one more
+/// pair of bindings and one more line in [`PAYLOAD_TYPES`]'s neighbours — never
+/// a reshuffle.
 ///
 /// ```
 /// # use std::sync::Arc;
@@ -425,6 +431,8 @@ pub fn space() -> EndpointSpace {
         .bind(Exact::new("urn:decompress:gzip"), decompress_gzip())
         .bind(Exact::new("urn:compress:zlib"), compress_zlib())
         .bind(Exact::new("urn:decompress:zlib"), decompress_zlib())
+        // LAST: since core 0.1.89 a later `bind` drops the name.
+        .named(space_iri("compress"))
 }
 
 #[cfg(test)]
