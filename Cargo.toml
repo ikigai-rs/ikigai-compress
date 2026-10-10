@@ -1,6 +1,6 @@
 [package]
 name = "ikigai-compress"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Compression as resources for ikigai: urn:compress:* / urn:decompress:* — deterministic gzip and zlib endpoints that are also registered transreptors, with a decompression bound that refuses rather than truncates."
