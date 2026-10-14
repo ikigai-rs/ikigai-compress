@@ -16,10 +16,13 @@
 //!   `Fixture::arg` takes a `String`, and a gzip stream is by construction not
 //!   UTF-8 (byte 2 of the magic is `0x8b`). There is no way to hand a conformance
 //!   fixture the one input these endpoints accept, so every check that must
-//!   *resolve* the action is out of reach — for this module and for every module
-//!   whose input is binary. The description-only checks (ARGSPECS, NAMES,
-//!   PIPELINE, REQUIRES-VERB) still run on them; `tests/pipeline.rs` and the unit
-//!   tests cover the rest end to end.
+//!   *resolve* the action is out of reach (REQUIRED included, since it drops an
+//!   input from a call that first has to resolve) — for this module and for every
+//!   module whose input is binary. The description-only checks (ARGSPECS, NAMES,
+//!   VALIDATE, PIPELINE, REQUIRES-VERB) still run on them; `tests/pipeline.rs` and
+//!   the unit tests cover the rest end to end, and
+//!   `a_missing_content_argument_is_a_missing_argument` is REQUIRED by hand on
+//!   all four endpoints.
 //! - `space()` is **self-named** `urn:iki:space:compress`: it takes no
 //!   parameters and reads nothing while it is built, so every call holds the
 //!   same doors and the name is a true claim.
