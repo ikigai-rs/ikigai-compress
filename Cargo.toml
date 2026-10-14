@@ -31,7 +31,7 @@ flate2 = { version = "1.1.10", default-features = false, features = ["rust_backe
 futures = "0.3"
 # The module recipe as one test (`tests/conformance.rs`): walks every bound
 # endpoint and reports every violation at once.
-ikigai-conformance = "0.6.0"
+ikigai-conformance = "0.8.0"
 # ★ The REPL engine, for `tests/pipeline.rs`. This module's whole point is
 # `source urn:file:x | urn:compress:gzip`, and the routing rule that makes that work
 # (a Source fills the ONE declared argument left unnamed) lives in the engine, not

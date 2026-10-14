@@ -659,8 +659,21 @@ mod tests {
 
     #[test]
     fn a_missing_content_argument_is_a_missing_argument() {
-        let err = source("urn:compress:gzip", &[]).expect_err("content is required");
-        assert!(matches!(err, Error::MissingArgument(ref name) if name == "content"));
+        // Every endpoint, because the conformance suite's REQUIRED check cannot
+        // reach the decompressors (no String fixture is a gzip/zlib stream, so they
+        // are opted out of every invoking check): this is that check, by hand.
+        for iri in [
+            "urn:compress:gzip",
+            "urn:decompress:gzip",
+            "urn:compress:zlib",
+            "urn:decompress:zlib",
+        ] {
+            let err = source(iri, &[]).expect_err("content is required");
+            assert!(
+                matches!(err, Error::MissingArgument(ref name) if name == "content"),
+                "{iri}: {err:?}"
+            );
+        }
     }
 
     // ---- media types -------------------------------------------------------
