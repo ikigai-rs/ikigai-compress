@@ -30,8 +30,12 @@ flate2 = { version = "1.1.10", default-features = false, features = ["rust_backe
 [dev-dependencies]
 futures = "0.3"
 # The module recipe as one test (`tests/conformance.rs`): walks every bound
-# endpoint and reports every violation at once.
-ikigai-conformance = "0.8.0"
+# endpoint and reports every violation at once. 0.9 added core 0.1.105's
+# contract-shape checks (REQUIRED probes input groups, OUTPUTS honors output_from,
+# PIPELINE's named-only line, VALIDATE refuses a default on a binding) and
+# RECOMPUTE; 0.10 adds FAILURES, OFF unless a suite opts in (this one does not).
+# Under 0.x the caret is a range: this admits >=0.10.0, <0.11.0.
+ikigai-conformance = "0.10.0"
 # ★ The REPL engine, for `tests/pipeline.rs`. This module's whole point is
 # `source urn:file:x | urn:compress:gzip`, and the routing rule that makes that work
 # (a Source fills the ONE declared argument left unnamed) lives in the engine, not
