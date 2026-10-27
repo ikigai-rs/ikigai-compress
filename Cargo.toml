@@ -1,6 +1,6 @@
 [package]
 name = "ikigai-compress"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Compression as resources for ikigai: urn:compress:* / urn:decompress:* — deterministic gzip and zlib endpoints that are also registered transreptors, with a decompression bound that refuses rather than truncates."
@@ -14,12 +14,12 @@ categories = ["wasm", "compression"]
 [dependencies]
 # The released kernel, consumed from crates.io — the SAME version the hosts use,
 # so a host links exactly one `ikigai-core` (no duplicate-crate type mismatch).
-# 0.1.89 is the true minimum: `space_iri` (the `urn:iki:space:` name `space()`
-# claims), and the `bind` that drops a name, so naming LAST is what makes the
-# claim true (ledger #987). The rest of the module is much older — the ArgSpec
-# era (0.1.37) and the transreptor half (0.1.22/0.1.23) — so the name sets the
-# floor. Under 0.x a caret is a range: this admits every 0.1.x from 0.1.89 on.
-ikigai-core = "0.1.89"
+# 0.2.0 is the streams release (ledger #2261). The old "0.1.89" pin meant
+# >=0.1.89, <0.2.0 under 0.x rules, so it could never reach 0.2; core's types are
+# in this crate's API, which is why the move is this crate's 0.3.0. (0.1.89 was the
+# floor for `space_iri` and the name-dropping `bind`, ledger #987; 0.2.0 has both.)
+# Under 0.x a caret is a range: this admits >=0.2.0, <0.3.0.
+ikigai-core = "0.2.0"
 # The compression backend. `rust_backend` (miniz_oxide) with default features OFF:
 # pure Rust, no C toolchain, and it compiles to wasm32-unknown-unknown. The
 # default feature set pulls a C/zlib backend — a machine dependency this ecosystem
@@ -33,18 +33,18 @@ futures = "0.3"
 # endpoint and reports every violation at once. 0.9 added core 0.1.105's
 # contract-shape checks (REQUIRED probes input groups, OUTPUTS honors output_from,
 # PIPELINE's named-only line, VALIDATE refuses a default on a binding) and
-# RECOMPUTE; 0.10 adds FAILURES, OFF unless a suite opts in (this one does not).
-# Under 0.x the caret is a range: this admits >=0.10.0, <0.11.0.
-ikigai-conformance = "0.10.0"
+# RECOMPUTE; 0.10 added FAILURES; 0.11 is the release on core 0.2.0 and turns
+# DATATYPES and FAILURES on by default.
+# Under 0.x the caret is a range: this admits >=0.11.0, <0.12.0.
+ikigai-conformance = "0.11.0"
 # ★ The REPL engine, for `tests/pipeline.rs`. This module's whole point is
 # `source urn:file:x | urn:compress:gzip`, and the routing rule that makes that work
 # (a Source fills the ONE declared argument left unnamed) lives in the engine, not
 # the kernel — so a kernel-only test cannot see it. Neither can the conformance
 # suite, which also calls the kernel and names `content` explicitly.
-# 0.1.43 is the release verified against core 0.1.89: 0.1.23 pulls an
-# `ikigai-resolve` that predates core's `Resolved` flag day (0.1.78) and no
-# longer compiles beside the core floor above.
-ikigai-engine = "0.1.43"
+# 0.2.0 is the engine release on core 0.2.0 (ledger #2261); any 0.1.x engine
+# links core 0.1 and would put two cores in the test build.
+ikigai-engine = "0.2.0"
 # The engine reads each contract as `Meta as=application/json`; the test kernel has
 # to be able to answer, or the engine fails open and the pipeline tests prove nothing.
 serde_json = "1"
