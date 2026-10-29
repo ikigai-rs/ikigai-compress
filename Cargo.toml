@@ -34,9 +34,11 @@ futures = "0.3"
 # contract-shape checks (REQUIRED probes input groups, OUTPUTS honors output_from,
 # PIPELINE's named-only line, VALIDATE refuses a default on a binding) and
 # RECOMPUTE; 0.10 added FAILURES; 0.11 is the release on core 0.2.0 and turns
-# DATATYPES and FAILURES on by default.
-# Under 0.x the caret is a range: this admits >=0.11.0, <0.12.0.
-ikigai-conformance = "0.11.0"
+# DATATYPES and FAILURES on by default; 0.12 turns on BODIES and BODY-INPUTS
+# (ledger #2559). Its floor pulls core >=0.2.4 into the test build; the library
+# itself still needs only 0.2.0, so `[dependencies]` is unchanged.
+# Under 0.x the caret is a range: this admits >=0.12.0, <0.13.0.
+ikigai-conformance = "0.12.0"
 # ★ The REPL engine, for `tests/pipeline.rs`. This module's whole point is
 # `source urn:file:x | urn:compress:gzip`, and the routing rule that makes that work
 # (a Source fills the ONE declared argument left unnamed) lives in the engine, not
