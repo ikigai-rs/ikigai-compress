@@ -101,12 +101,16 @@ not an authority some callers hold.
 
 `tests/conformance.rs` runs
 [`ikigai-conformance`](https://github.com/ikigai-rs/ikigai-conformance) over the
-whole space. The compressors pass every check with no waiver. The
-**decompressors are opted out of the checks that invoke them**, for a reason
-worth stating plainly: `Fixture::arg` takes a `String`, and a gzip stream is by
-construction not UTF-8, so there is no way to hand a conformance fixture the one
-input those endpoints accept. The description-only checks still run on them, and
-`tests/pipeline.rs` plus the unit tests cover them end to end.
+whole space, `BODIES` and `BODY-INPUTS` included (conformance 0.12). The
+compressors pass every check with no waiver. The decompressors get a binary
+fixture (`Fixture::arg_bytes`: the gzip/zlib stream of `hello`), so every
+invoking check runs on them too, except the three that parse each declared RDF
+face (`SKOLEM-RDF`, `VOCABULARY`, `DATATYPES`): a decompressor's RDF outputs
+are only the caller's `as=` label on whatever the container held, and no one
+payload parses as Turtle, N-Quads, N-Triples, TriG and JSON-LD at once. The
+suite gets the kernel's own space through `Suite::body_space`, and the test
+requires that nothing is left unprobed. `tests/pipeline.rs` plus the unit tests
+cover the endpoints end to end.
 
 ## Licence
 
