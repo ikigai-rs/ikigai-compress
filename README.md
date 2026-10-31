@@ -135,6 +135,12 @@ transports. The test requires that nothing is left unprobed. `tests/incremental.
 checks streaming, bounds and malformed containers; `tests/pipeline.rs` and the
 unit tests cover the endpoints end to end.
 
+## Accessibility
+
+What people read from this crate is its refusals and its endpoints' descriptions; the bytes it
+answers are not meant to be read. [ACCESSIBILITY.md](ACCESSIBILITY.md) says what that text is,
+the rules it follows, what is not tested, and how to report a barrier.
+
 ## Licence
 
 MIT OR Apache-2.0.
