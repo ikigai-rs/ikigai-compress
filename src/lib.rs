@@ -38,11 +38,19 @@
 //! of gzip can expand to gigabytes, and this module exists to be handed bytes
 //! from elsewhere. `max-bytes` (default 64 MiB) caps the output, and exceeding it
 //! is an error naming the limit — never a short, well-formed-looking
-//! representation. The reader is capped at `max-bytes + 1`, so the refusal costs
-//! one byte over the limit rather than the whole bomb. `max-bytes` itself is
+//! representation. Output writes are bounded, and codec buffers stay fixed in
+//! size rather than growing with the expanded payload. `max-bytes` itself is
 //! bounded by [`MAX_BYTES_CEILING`] (1 GiB): a caller can lower the limit freely
 //! and can raise it up to the ceiling, so a remote caller cannot name a number
 //! that exhausts the host.
+//!
+//! **Incremental bodies.** All four transreptors declare `incremental` and read
+//! streamed `content` through flate2's incremental codecs and push writers.
+//! Output is lazy and one-shot, with fixed-size output buffers. `max-bytes`
+//! counts across chunks and concatenated gzip members. A late checksum failure,
+//! truncation or upstream error fails the body, so readers must honor its end.
+//! Buffered input retains cacheable buffered output; the bytes API collects
+//! under the invocation's memory budget.
 //!
 //! **The piped value is the point.** Every endpoint declares its bytes input as
 //! the single required argument `content`, which is both halves of pipeline
@@ -72,15 +80,13 @@
 //! decompression, and the control for that is the bound above — a number that
 //! applies to every caller — not an authority some callers hold.
 
-use std::io::{Read, Write};
-
-use flate2::read::{MultiGzDecoder, ZlibDecoder};
-use flate2::write::ZlibEncoder;
-use flate2::{Compression, GzBuilder};
+use async_trait::async_trait;
 use ikigai_core::{
-    space_iri, ArgSpec, Description, EndpointSpace, Error, Exact, FnEndpoint, Invocation, ReprType,
-    Representation, Result, Verb,
+    space_iri, ArgRef, ArgSpec, Body, Description, Endpoint, EndpointSpace, Error, Exact,
+    Invocation, ReprType, Representation, Result, Verb,
 };
+
+mod incremental;
 
 // --- media types -----------------------------------------------------------
 
@@ -155,12 +161,6 @@ const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 
 // --- argument reading ------------------------------------------------------
 
-/// The bytes to (de)compress: the `content` argument, which the engine fills
-/// from the pipe and a transreption step passes by name.
-fn content<'a>(inv: &'a Invocation<'_>) -> Result<&'a [u8]> {
-    inv.inline_arg("content")
-}
-
 /// The deflate level: absent → [`DEFAULT_LEVEL`]; otherwise `0..=9`, refusing
 /// anything else rather than clamping (a clamped level would silently change the
 /// output bytes of every later call).
@@ -232,65 +232,13 @@ fn output_type(inv: &Invocation<'_>) -> Result<ReprType> {
     Ok(ReprType::new(media))
 }
 
-// --- the transforms --------------------------------------------------------
-
-/// gzip `data` with a header pinned to constants — see [`OS_UNKNOWN`] and
-/// [`MTIME_NONE`].
-fn gzip(data: &[u8], level: u32) -> Result<Vec<u8>> {
-    let mut encoder = GzBuilder::new()
-        .mtime(MTIME_NONE)
-        .operating_system(OS_UNKNOWN)
-        .write(Vec::new(), Compression::new(level));
-    encoder
-        .write_all(data)
-        .and_then(|()| encoder.finish())
-        .map_err(|e| Error::Endpoint(format!("gzip: {e}")))
-}
-
-/// zlib-compress `data`. The zlib header is two bytes derived from the level, so
-/// there is no ambient field to pin.
-fn zlib(data: &[u8], level: u32) -> Result<Vec<u8>> {
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::new(level));
-    encoder
-        .write_all(data)
-        .and_then(|()| encoder.finish())
-        .map_err(|e| Error::Endpoint(format!("zlib: {e}")))
-}
-
-/// Read `reader` to the end, **refusing** past `limit` rather than truncating.
-///
-/// The reader is capped at `limit + 1` bytes: enough to know the limit was
-/// exceeded, never enough for the bomb to land. The one extra byte is why this
-/// cannot be written as "read it all, then check the length".
-fn bounded(reader: impl Read, limit: usize, algorithm: &str) -> Result<Vec<u8>> {
-    let mut out = Vec::new();
-    let read = reader.take(limit as u64 + 1).read_to_end(&mut out);
-    // A decode error and an over-limit read are both properties of `content`, so
-    // both blame it — but they say different things, and the caller can tell the
-    // difference from the detail.
-    read.map_err(|e| Error::InvalidArgument {
-        name: "content".to_string(),
-        detail: format!("not a valid {algorithm} stream: {e}"),
-    })?;
-    if out.len() > limit {
-        return Err(Error::InvalidArgument {
-            name: "content".to_string(),
-            detail: format!(
-                "decompressed output exceeds the {limit}-byte limit set by `max-bytes`; \
-                 refusing rather than returning a truncated representation \
-                 (raise `max-bytes`, up to {MAX_BYTES_CEILING})"
-            ),
-        });
-    }
-    Ok(out)
-}
-
 // --- descriptions ----------------------------------------------------------
 
 /// The `content` ArgSpec — required, unnamed in a pipe, and the name a kernel
 /// transreption step uses. The single required argument on every endpoint here.
 fn content_spec(what: &str) -> ArgSpec {
     ArgSpec::new("content")
+        .reads_body()
         .summary(format!(
             "{what} — arbitrary bytes, not necessarily UTF-8; filled from the pipe"
         ))
@@ -319,6 +267,7 @@ fn compress_description(id: &str, algorithm: &str, media: &str) -> Description {
         )
         .output(media)
         .transreptor(PAYLOAD_TYPES.iter().copied(), [media])
+        .incremental()
 }
 
 /// The shared description of a decompressing endpoint.
@@ -356,49 +305,116 @@ fn decompress_description(id: &str, algorithm: &str, media: &str) -> Description
     for payload in PAYLOAD_TYPES {
         description = description.output(*payload);
     }
-    description.transreptor([media], PAYLOAD_TYPES.iter().copied())
+    description
+        .transreptor([media], PAYLOAD_TYPES.iter().copied())
+        .incremental()
 }
 
 // --- endpoints -------------------------------------------------------------
 
-/// `urn:compress:gzip` — gzip the piped bytes (`application/gzip`).
-pub fn compress_gzip() -> FnEndpoint {
-    FnEndpoint::new("compress-gzip", |inv: &Invocation<'_>| {
-        let bytes = gzip(content(inv)?, level(inv)?)?;
-        Ok(Representation::new(ReprType::new(GZIP), bytes).cacheable())
-    })
-    .with_description(compress_description("compress-gzip", "gzip", GZIP))
+/// A gzip or zlib endpoint with incremental input and output.
+///
+/// The body API is lazy. The bytes API collects under the invocation's memory budget.
+pub struct CompressionEndpoint {
+    gzip: bool,
+    compress: bool,
+    description: Description,
 }
 
-/// `urn:decompress:gzip` — expand a gzip stream, bounded by `max-bytes`.
-///
-/// Concatenated members are read (the `gzip -c a b > ab.gz` case); trailing
-/// bytes that are not another member are an error rather than silently ignored
-/// input.
-pub fn decompress_gzip() -> FnEndpoint {
-    FnEndpoint::new("decompress-gzip", |inv: &Invocation<'_>| {
-        let bytes = bounded(MultiGzDecoder::new(content(inv)?), max_bytes(inv)?, "gzip")?;
-        Ok(Representation::new(output_type(inv)?, bytes).cacheable())
-    })
-    .with_description(decompress_description("decompress-gzip", "gzip", GZIP))
+#[async_trait]
+impl Endpoint for CompressionEndpoint {
+    async fn invoke(&self, inv: &Invocation<'_>) -> Result<Representation> {
+        let repr = self.invoke_body(inv).await?;
+        match inv.memory_budget() {
+            Some(budget) => repr.collect_within(budget).await,
+            None => {
+                repr.collect(ikigai_core::DEFAULT_STREAM_MEMORY as usize)
+                    .await
+            }
+        }
+    }
+
+    async fn invoke_body(&self, inv: &Invocation<'_>) -> Result<Representation<Body>> {
+        let (media, level, limit) = if self.compress {
+            (
+                ReprType::new(if self.gzip { GZIP } else { ZLIB }),
+                level(inv)?,
+                0,
+            )
+        } else {
+            (output_type(inv)?, DEFAULT_LEVEL, max_bytes(inv)?)
+        };
+        let body = match inv.request.args.get("content") {
+            Some(ArgRef::Reference(iri)) => inv.source_body(iri).await?.bytes,
+            _ => inv.content_body("content").await?,
+        };
+        let buffered = matches!(body, Body::Bytes(_));
+        let transformed = if self.compress {
+            incremental::compress(body, self.gzip, level)
+        } else {
+            incremental::decompress(body, self.gzip, limit)
+        };
+        let repr = Representation::from_body(media, transformed).cacheable();
+        // Buffered calls retain their cacheable body shape. Streamed calls
+        // never collect, and a one-shot answer is kept out of the kernel cache.
+        if buffered {
+            let collected = match inv.memory_budget() {
+                Some(budget) => repr.collect_within(budget).await?,
+                None => {
+                    repr.collect(ikigai_core::DEFAULT_STREAM_MEMORY as usize)
+                        .await?
+                }
+            };
+            Ok(collected.into_body())
+        } else {
+            Ok(repr)
+        }
+    }
+
+    fn name(&self) -> &str {
+        &self.description.id
+    }
+
+    fn describe(&self) -> Description {
+        self.description.clone()
+    }
+}
+
+/// `urn:compress:gzip` — gzip the piped bytes (`application/gzip`).
+pub fn compress_gzip() -> CompressionEndpoint {
+    CompressionEndpoint {
+        gzip: true,
+        compress: true,
+        description: compress_description("compress-gzip", "gzip", GZIP),
+    }
+}
+
+/// `urn:decompress:gzip` — expand all concatenated gzip members under `max-bytes`.
+/// Trailing bytes that are not another member are refused.
+pub fn decompress_gzip() -> CompressionEndpoint {
+    CompressionEndpoint {
+        gzip: true,
+        compress: false,
+        description: decompress_description("decompress-gzip", "gzip", GZIP),
+    }
 }
 
 /// `urn:compress:zlib` — zlib-compress the piped bytes (`application/zlib`).
-pub fn compress_zlib() -> FnEndpoint {
-    FnEndpoint::new("compress-zlib", |inv: &Invocation<'_>| {
-        let bytes = zlib(content(inv)?, level(inv)?)?;
-        Ok(Representation::new(ReprType::new(ZLIB), bytes).cacheable())
-    })
-    .with_description(compress_description("compress-zlib", "zlib", ZLIB))
+pub fn compress_zlib() -> CompressionEndpoint {
+    CompressionEndpoint {
+        gzip: false,
+        compress: true,
+        description: compress_description("compress-zlib", "zlib", ZLIB),
+    }
 }
 
 /// `urn:decompress:zlib` — expand a zlib stream, bounded by `max-bytes`.
-pub fn decompress_zlib() -> FnEndpoint {
-    FnEndpoint::new("decompress-zlib", |inv: &Invocation<'_>| {
-        let bytes = bounded(ZlibDecoder::new(content(inv)?), max_bytes(inv)?, "zlib")?;
-        Ok(Representation::new(output_type(inv)?, bytes).cacheable())
-    })
-    .with_description(decompress_description("decompress-zlib", "zlib", ZLIB))
+pub fn decompress_zlib() -> CompressionEndpoint {
+    CompressionEndpoint {
+        gzip: false,
+        compress: false,
+        description: decompress_description("decompress-zlib", "zlib", ZLIB),
+    }
 }
 
 /// The name [`space`] claims: `urn:iki:space:compress`.
@@ -456,8 +472,7 @@ mod tests {
     }
 
     /// The description of one bound endpoint.
-    fn describe(endpoint: &FnEndpoint) -> Description {
-        use ikigai_core::Endpoint;
+    fn describe(endpoint: &CompressionEndpoint) -> Description {
         endpoint.describe()
     }
 
