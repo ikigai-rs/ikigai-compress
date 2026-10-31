@@ -25,16 +25,16 @@
 //! - `BODIES` gets the module space through `Suite::body_space`, the SAME `Arc`
 //!   the kernel was built from, so it compares each endpoint's `invoke` with its
 //!   `invoke_body` and holds a one-byte-short budget to `OverBudget`.
-//!   `BODY-INPUTS` has nothing to probe: no argument is declared `reads_body`
-//!   (`content` is read inline, `Invocation::inline_arg`), so no content store
-//!   is wired. `Expected::nothing_unprobed` keeps the wiring from falling off.
+//!   `BODY-INPUTS` compares inline, reference, stored and attached one-shot
+//!   content for all four endpoints, using the shared content store.
+//!   `Expected::nothing_unprobed` keeps the wiring from falling off.
 //! - `space()` is **self-named** `urn:iki:space:compress`: it takes no
 //!   parameters and reads nothing while it is built, so every call holds the
 //!   same doors and the name is a true claim.
 
 use futures::executor::block_on;
 use ikigai_conformance::{Check, Expected, Fixture, Suite};
-use ikigai_core::{ArgRef, Capability, Iri, Kernel, Request, Verb};
+use ikigai_core::{ArgRef, Capability, Iri, Kernel, MemoryContentStore, Request, Verb};
 use std::sync::Arc;
 
 /// Every endpoint `space()` binds, by description id.
@@ -73,9 +73,10 @@ fn conforms() {
     // One space, shared: the kernel resolves through it and BODIES invokes the
     // endpoints in it directly.
     let space = Arc::new(ikigai_compress::space());
-    let kernel = Kernel::new(space.clone());
+    let store = Arc::new(MemoryContentStore::new(1024 * 1024));
+    let kernel = Kernel::new(space.clone()).with_content_store(store.clone());
 
-    let mut suite = Suite::new().body_space(space);
+    let mut suite = Suite::new().body_space(space).body_input_store(store);
     // The compressors take any bytes, so `hello` is a valid call — and once the
     // suite can resolve them it can hold them to purity and cacheability.
     for id in ["compress-gzip", "compress-zlib"] {

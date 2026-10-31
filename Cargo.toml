@@ -12,14 +12,17 @@ keywords = ["ikigai", "roc", "gzip", "compression", "module"]
 categories = ["wasm", "compression"]
 
 [dependencies]
+async-trait = "0.1"
+futures-util = "0.3"
 # The released kernel, consumed from crates.io — the SAME version the hosts use,
 # so a host links exactly one `ikigai-core` (no duplicate-crate type mismatch).
 # 0.2.0 is the streams release (ledger #2261). The old "0.1.89" pin meant
 # >=0.1.89, <0.2.0 under 0.x rules, so it could never reach 0.2; core's types are
 # in this crate's API, which is why the move is this crate's 0.3.0. (0.1.89 was the
 # floor for `space_iri` and the name-dropping `bind`, ledger #987; 0.2.0 has both.)
-# Under 0.x a caret is a range: this admits >=0.2.0, <0.3.0.
-ikigai-core = "0.2.0"
+# 0.2.4 adds `ArgSpec::reads_body`, which these incremental endpoints declare.
+# Under 0.x a caret is a range: this admits >=0.2.4, <0.3.0.
+ikigai-core = "0.2.4"
 # The compression backend. `rust_backend` (miniz_oxide) with default features OFF:
 # pure Rust, no C toolchain, and it compiles to wasm32-unknown-unknown. The
 # default feature set pulls a C/zlib backend — a machine dependency this ecosystem
@@ -36,7 +39,7 @@ futures = "0.3"
 # RECOMPUTE; 0.10 added FAILURES; 0.11 is the release on core 0.2.0 and turns
 # DATATYPES and FAILURES on by default; 0.12 turns on BODIES and BODY-INPUTS
 # (ledger #2559). Its floor pulls core >=0.2.4 into the test build; the library
-# itself still needs only 0.2.0, so `[dependencies]` is unchanged.
+# uses the same floor for the body input declaration.
 # Under 0.x the caret is a range: this admits >=0.12.0, <0.13.0.
 ikigai-conformance = "0.12.0"
 # ★ The REPL engine, for `tests/pipeline.rs`. This module's whole point is

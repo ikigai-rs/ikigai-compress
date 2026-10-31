@@ -43,6 +43,25 @@ let plan = kernel.select_transreptor("application/gzip", "text/turtle").unwrap()
 assert_eq!(plan[0].endpoint, "urn:decompress:gzip");   // nobody named it
 ```
 
+## Incremental bodies
+
+All four transreptors declare `incremental`. `content` accepts inline bytes,
+resource references, stored content IDs and attached streams. Streamed input
+flows through flate2's `Compress` / `Decompress` state a chunk at a time, producing
+one-shot output with a fixed 16 KiB output buffer. The transform holds only the
+current input chunk and codec state; it never collects a streamed input.
+Dropping the output stops reading upstream. Buffered input retains buffered,
+cacheable output; the bytes API collects under the run's memory budget.
+
+`max-bytes` counts decompressed output across all chunks and all concatenated
+gzip members. Truncation, invalid checksums and upstream failures end the body
+with an error, even if earlier chunks have already been delivered. Consumers
+must read through the end and honor that error. Gzip optional header fields and
+header CRCs are supported without buffering names, comments or extra fields.
+
+The endpoint constructors now return `CompressionEndpoint`, which implements
+`Endpoint`, in place of `FnEndpoint`.
+
 ## Three properties it is built around
 
 **The output is a function of the input.** gzip's header carries an mtime and an
@@ -57,7 +76,7 @@ something is a red test rather than a silent change to every archive's identity.
 gzip can expand to gigabytes, and this module exists to be handed bytes from
 elsewhere. `max-bytes` (default 64 MiB) caps the output and exceeding it is an
 error *naming the limit* — never a short, well-formed-looking representation that
-passes every shape check downstream. The reader is capped at `max-bytes + 1`, so
+passes every shape check downstream. The decoder is capped at `max-bytes + 1`, so
 the refusal costs one byte over the limit rather than the whole bomb. `max-bytes`
 itself is capped at 1 GiB: a caller can lower it freely and raise it to the
 ceiling, so a remote caller cannot name a number that exhausts the host.
@@ -108,9 +127,11 @@ invoking check runs on them too, except the three that parse each declared RDF
 face (`SKOLEM-RDF`, `VOCABULARY`, `DATATYPES`): a decompressor's RDF outputs
 are only the caller's `as=` label on whatever the container held, and no one
 payload parses as Turtle, N-Quads, N-Triples, TriG and JSON-LD at once. The
-suite gets the kernel's own space through `Suite::body_space`, and the test
-requires that nothing is left unprobed. `tests/pipeline.rs` plus the unit tests
-cover the endpoints end to end.
+suite gets the kernel's own space through `Suite::body_space` and the shared
+content store through `Suite::body_input_store`, comparing all four body input
+transports. The test requires that nothing is left unprobed. `tests/incremental.rs`
+checks streaming, bounds and malformed containers; `tests/pipeline.rs` and the
+unit tests cover the endpoints end to end.
 
 ## Licence
 
