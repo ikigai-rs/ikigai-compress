@@ -1,6 +1,6 @@
 [package]
 name = "ikigai-compress"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Compression as resources for ikigai: urn:compress:* / urn:decompress:* — deterministic gzip and zlib endpoints that are also registered transreptors, with a decompression bound that refuses rather than truncates."
@@ -21,8 +21,12 @@ futures-util = "0.3"
 # in this crate's API, which is why the move is this crate's 0.3.0. (0.1.89 was the
 # floor for `space_iri` and the name-dropping `bind`, ledger #987; 0.2.0 has both.)
 # 0.2.4 adds `ArgSpec::reads_body`, which these incremental endpoints declare.
-# Under 0.x a caret is a range: this admits >=0.2.4, <0.3.0.
-ikigai-core = "0.2.4"
+# 0.3.0 is the scoped content store (ledger #2965): held content is scoped to whoever
+# delivered it, a principal-less hold is root's, and `ContentStore::put`/`put_replay`
+# are root-only. This crate calls neither, but core's types are in its API, which is
+# why the move is this crate's 0.5.0.
+# Under 0.x a caret is a range: this admits >=0.3.0, <0.4.0.
+ikigai-core = "0.3.0"
 # The compression backend. `rust_backend` (miniz_oxide) with default features OFF:
 # pure Rust, no C toolchain, and it compiles to wasm32-unknown-unknown. The
 # default feature set pulls a C/zlib backend — a machine dependency this ecosystem
@@ -38,10 +42,11 @@ futures = "0.3"
 # PIPELINE's named-only line, VALIDATE refuses a default on a binding) and
 # RECOMPUTE; 0.10 added FAILURES; 0.11 is the release on core 0.2.0 and turns
 # DATATYPES and FAILURES on by default; 0.12 turns on BODIES and BODY-INPUTS
-# (ledger #2559). Its floor pulls core >=0.2.4 into the test build; the library
-# uses the same floor for the body input declaration.
-# Under 0.x the caret is a range: this admits >=0.12.0, <0.13.0.
-ikigai-conformance = "0.12.0"
+# (ledger #2559); 0.14 is the release on core 0.3.0 and scopes body samples to their
+# callers (ledger #2965). Its floor pulls core >=0.3.0 into the test build, the same
+# floor the library uses.
+# Under 0.x the caret is a range: this admits >=0.14.0, <0.15.0.
+ikigai-conformance = "0.14.0"
 # ★ The REPL engine, for `tests/pipeline.rs`. This module's whole point is
 # `source urn:file:x | urn:compress:gzip`, and the routing rule that makes that work
 # (a Source fills the ONE declared argument left unnamed) lives in the engine, not
@@ -49,6 +54,9 @@ ikigai-conformance = "0.12.0"
 # suite, which also calls the kernel and names `content` explicitly.
 # 0.2.0 is the engine release on core 0.2.0 (ledger #2261); any 0.1.x engine
 # links core 0.1 and would put two cores in the test build.
+# ⚠ The same is now true one step on: every published engine (0.2.13 at this writing)
+# links core 0.2, so `tests/pipeline.rs` does not compile against this crate's core 0.3
+# until an engine on core 0.3 is published and this pin moves to it.
 ikigai-engine = "0.2.0"
 # The engine reads each contract as `Meta as=application/json`; the test kernel has
 # to be able to answer, or the engine fails open and the pipeline tests prove nothing.
