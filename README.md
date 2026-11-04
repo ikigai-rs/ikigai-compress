@@ -64,6 +64,9 @@ header CRCs are handled by flate2.
 Version 0.4.0 changes the endpoint constructors to return `CompressionEndpoint`,
 which implements `Endpoint`, in place of `FnEndpoint`.
 
+Version 0.5.0 moves to `ikigai-core` 0.3, the scoped content store: core's types
+are in this crate's API. No endpoint changes.
+
 ## Three properties it is built around
 
 **The output is a function of the input.** gzip's header carries an mtime and an
@@ -122,7 +125,7 @@ not an authority some callers hold.
 
 `tests/conformance.rs` runs
 [`ikigai-conformance`](https://github.com/ikigai-rs/ikigai-conformance) over the
-whole space, `BODIES` and `BODY-INPUTS` included (conformance 0.12). The
+whole space, `BODIES` and `BODY-INPUTS` included (conformance 0.14). The
 compressors pass every check with no waiver. The decompressors get a binary
 fixture (`Fixture::arg_bytes`: the gzip/zlib stream of `hello`), so every
 invoking check runs on them too, except the three that parse each declared RDF
