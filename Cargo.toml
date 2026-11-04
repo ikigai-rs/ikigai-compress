@@ -52,12 +52,10 @@ ikigai-conformance = "0.14.0"
 # (a Source fills the ONE declared argument left unnamed) lives in the engine, not
 # the kernel — so a kernel-only test cannot see it. Neither can the conformance
 # suite, which also calls the kernel and names `content` explicitly.
-# 0.2.0 is the engine release on core 0.2.0 (ledger #2261); any 0.1.x engine
-# links core 0.1 and would put two cores in the test build.
-# ⚠ The same is now true one step on: every published engine (0.2.13 at this writing)
-# links core 0.2, so `tests/pipeline.rs` does not compile against this crate's core 0.3
-# until an engine on core 0.3 is published and this pin moves to it.
-ikigai-engine = "0.2.0"
+# 0.3.0 is the engine release on core 0.3.0 (ledger #3061); every earlier engine links
+# an older core and would put two cores in the test build. ⚠ `^0.3.0` is a CEILING
+# too (<0.4.0).
+ikigai-engine = "0.3.0"
 # The engine reads each contract as `Meta as=application/json`; the test kernel has
 # to be able to answer, or the engine fails open and the pipeline tests prove nothing.
 serde_json = "1"
