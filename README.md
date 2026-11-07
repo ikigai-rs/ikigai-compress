@@ -144,6 +144,6 @@ What people read from this crate is its refusals and its endpoints' descriptions
 answers are not meant to be read. [ACCESSIBILITY.md](ACCESSIBILITY.md) says what that text is,
 the rules it follows, what is not tested, and how to report a barrier.
 
-## Licence
+## License
 
 MIT OR Apache-2.0.
