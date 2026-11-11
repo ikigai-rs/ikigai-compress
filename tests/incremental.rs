@@ -537,3 +537,85 @@ fn decoded_output_is_drained_before_polling_upstream_again() {
         }
     });
 }
+
+#[test]
+fn gzip_rejects_reserved_flags_unknown_methods_and_each_corrupt_trailer_field() {
+    block_on(async {
+        let valid = encoded("gzip", b"payload", 6);
+        let mut invalid = Vec::new();
+        for bit in [0x20, 0x40, 0x80] {
+            let mut member = valid.clone();
+            member[3] |= bit;
+            invalid.push((format!("reserved flag {bit}"), member));
+        }
+        for method in [0, 7, 9, 255] {
+            let mut member = valid.clone();
+            member[2] = method;
+            invalid.push((format!("compression method {method}"), member));
+        }
+        for offset in 1..=8 {
+            let mut member = valid.clone();
+            let index = member.len() - offset;
+            member[index] ^= 1;
+            invalid.push((format!("trailer byte {offset}"), member));
+        }
+        // Even a short suffix that looks like the start of another gzip member
+        // must be refused, including after an empty member.
+        for suffix in [&b"\0"[..], b"x", b"\x1f", b"\x1f\x8b", b"\x1f\x8b\x08"] {
+            let mut joined = valid.clone();
+            joined.extend(encoded("gzip", b"", 6));
+            joined.extend(suffix);
+            invalid.push((format!("trailing suffix {suffix:?}"), joined));
+        }
+        for (reason, member) in invalid {
+            for size in [1, 7, member.len()] {
+                let (kernel, _) = source_kernel(fragmented(&member, size), false);
+                let result = kernel
+                    .issue(request("gzip", false), &Capability::root())
+                    .await;
+                assert!(
+                    matches!(result, Err(Error::InvalidArgument { ref name, .. }) if name == "content"),
+                    "accepted {reason} with chunk size {size}: {result:?}"
+                );
+            }
+        }
+    });
+}
+
+#[test]
+fn gzip_accepts_each_optional_header_field_independently() {
+    block_on(async {
+        let base = encoded("gzip", b"payload", 6);
+        // FTEXT, FEXTRA (including an empty extra field), FNAME and FCOMMENT.
+        // XFL and OS are informational and may contain unknown values.
+        for (flags, extra) in [
+            (1, &b""[..]),
+            (4, &b"\0\0"[..]),
+            (4, &b"\x06\0AB\x02\0xy"[..]),
+            (8, &b"name\xff\0"[..]),
+            (16, &b"comment\xff\0"[..]),
+        ] {
+            for header_crc in [false, true] {
+                let mut member = base[..10].to_vec();
+                member[3] = flags | if header_crc { 2 } else { 0 };
+                member[8] = 255;
+                member[9] = 254;
+                member.extend(extra);
+                if header_crc {
+                    let mut crc = flate2::Crc::new();
+                    crc.update(&member);
+                    member.extend((crc.sum() as u16).to_le_bytes());
+                }
+                member.extend(&base[10..]);
+                for size in [1, 7, member.len()] {
+                    let (kernel, _) = source_kernel(fragmented(&member, size), false);
+                    let output = kernel
+                        .issue(request("gzip", false), &Capability::root())
+                        .await
+                        .unwrap();
+                    assert_eq!(output.bytes, b"payload");
+                }
+            }
+        }
+    });
+}
