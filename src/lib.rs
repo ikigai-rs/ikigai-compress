@@ -161,11 +161,21 @@ const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 
 // --- argument reading ------------------------------------------------------
 
+/// Only an absent option gets its default. A supplied value that cannot be read
+/// as inline UTF-8 must retain the argument reader's refusal.
+fn optional_inline_str<'a>(inv: &'a Invocation<'_>, name: &str) -> Result<Option<&'a str>> {
+    match inv.inline_str(name) {
+        Ok(raw) => Ok(Some(raw)),
+        Err(Error::MissingArgument(_)) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 /// The deflate level: absent → [`DEFAULT_LEVEL`]; otherwise `0..=9`, refusing
 /// anything else rather than clamping (a clamped level would silently change the
 /// output bytes of every later call).
 fn level(inv: &Invocation<'_>) -> Result<u32> {
-    let Ok(raw) = inv.inline_str("level") else {
+    let Some(raw) = optional_inline_str(inv, "level")? else {
         return Ok(DEFAULT_LEVEL);
     };
     match raw.trim().parse::<u32>() {
@@ -180,7 +190,7 @@ fn level(inv: &Invocation<'_>) -> Result<u32> {
 /// The output cap: absent → [`DEFAULT_MAX_BYTES`]; otherwise the parsed value,
 /// refused above [`MAX_BYTES_CEILING`].
 fn max_bytes(inv: &Invocation<'_>) -> Result<usize> {
-    let Ok(raw) = inv.inline_str("max-bytes") else {
+    let Some(raw) = optional_inline_str(inv, "max-bytes")? else {
         return Ok(DEFAULT_MAX_BYTES);
     };
     let raw = raw.trim();
@@ -210,7 +220,7 @@ fn max_bytes(inv: &Invocation<'_>) -> Result<usize> {
 /// the caller's claim — the container does not record one, so nothing here can
 /// check it.
 fn output_type(inv: &Invocation<'_>) -> Result<ReprType> {
-    let Ok(raw) = inv.inline_str("as") else {
+    let Some(raw) = optional_inline_str(inv, "as")? else {
         return Ok(ReprType::new(OCTET_STREAM));
     };
     let media = raw.trim();
