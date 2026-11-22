@@ -152,3 +152,57 @@ fn transreptors_round_trip_all_advertised_media_types_and_payload_shapes() {
         }
     }
 }
+
+#[test]
+fn planned_gzip_decompression_preserves_media_type_parameters() {
+    for media in ["text/plain; charset=utf-8", "text/plain;charset=utf-8"] {
+        for streamed in [false, true] {
+            let endpoint = PlannedRoundTrip {
+                payload: b"hello".to_vec(),
+                media,
+                container: ikigai_compress::GZIP,
+                streamed,
+            };
+            let kernel = Kernel::new(Arc::new(
+                ikigai_compress::space()
+                    .bind(ikigai_core::Exact::new("urn:audit:round-trip"), endpoint),
+            ));
+            let request = Request::new(Verb::Source, Iri::parse("urn:audit:round-trip").unwrap());
+            let output = block_on(kernel.issue(request, &Capability::root())).unwrap();
+            assert_eq!(output.bytes, b"hello");
+            assert_eq!(
+                output.repr_type,
+                ikigai_core::ReprType::new("text/plain").with_param("charset", "utf-8")
+            );
+        }
+    }
+}
+
+#[test]
+fn explicit_gzip_decompression_stores_parameters_separately_from_the_media_type() {
+    let compressed = source("urn:compress:gzip", b"hello", None).unwrap();
+    let expected = ikigai_core::ReprType::new("text/plain").with_param("charset", "utf-8");
+    for media in [
+        r#"text/plain;charset=utf-8"#,
+        r#"text/plain; Charset="utf-8""#,
+    ] {
+        let output = source(
+            "urn:decompress:gzip",
+            &compressed.bytes,
+            Some(("as", media.as_bytes())),
+        )
+        .unwrap();
+        assert_eq!(output.repr_type, expected);
+    }
+}
+
+#[test]
+fn gzip_decompression_refuses_malformed_media_type_parameters() {
+    let compressed = source("urn:compress:gzip", b"hello", None).unwrap();
+    let output = source(
+        "urn:decompress:gzip",
+        &compressed.bytes,
+        Some(("as", b"text/plain;charset")),
+    );
+    assert!(matches!(output, Err(Error::InvalidArgument { ref name, .. }) if name == "as"));
+}

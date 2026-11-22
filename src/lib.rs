@@ -215,31 +215,22 @@ fn max_bytes(inv: &Invocation<'_>) -> Result<usize> {
 /// The media type to label the decompressed payload with: the `as` argument if
 /// present, else [`OCTET_STREAM`].
 ///
-/// `as` is checked for the *shape* of a media type only (`type/subtype`, no
-/// whitespace or control characters). Whether the payload really is that type is
-/// the caller's claim — the container does not record one, so nothing here can
-/// check it.
+/// Parse the caller's media type and store its parameters in the representation
+/// type. The label describes the payload according to the caller.
 fn output_type(inv: &Invocation<'_>) -> Result<ReprType> {
     let Some(raw) = optional_inline_str(inv, "as")? else {
         return Ok(ReprType::new(OCTET_STREAM));
     };
     let media = raw.trim();
-    let plausible = match media.split_once('/') {
-        Some((kind, subtype)) => {
-            !kind.is_empty()
-                && !subtype.is_empty()
-                && !subtype.contains('/')
-                && !media.chars().any(|c| c.is_whitespace() || c.is_control())
-        }
-        None => false,
-    };
-    if !plausible {
-        return Err(Error::InvalidArgument {
-            name: "as".to_string(),
-            detail: format!("expected a media type like `text/turtle`, got {media:?}"),
-        });
+    let parsed = mediatype::MediaType::parse(media).map_err(|_| Error::InvalidArgument {
+        name: "as".to_string(),
+        detail: format!("expected a media type like `text/turtle`, got {media:?}"),
+    })?;
+    let mut repr_type = ReprType::new(parsed.essence().to_string());
+    for (name, value) in parsed.params.iter() {
+        repr_type = repr_type.with_param(name.as_str().to_ascii_lowercase(), value.unquoted_str());
     }
-    Ok(ReprType::new(media))
+    Ok(repr_type)
 }
 
 // --- descriptions ----------------------------------------------------------
