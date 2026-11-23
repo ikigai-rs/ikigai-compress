@@ -1,6 +1,6 @@
 [package]
 name = "ikigai-compress"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Compression as resources for ikigai: urn:compress:* / urn:decompress:* — deterministic gzip and zlib endpoints that are also registered transreptors, with a decompression bound that refuses rather than truncates."
@@ -37,6 +37,7 @@ ikigai-core = "0.4.0"
 # has already been bitten by (an Xcode licence lapse took out `cc` on both machines
 # this month), and one a wasm face cannot have at all.
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+mediatype = "0.23"
 
 [dev-dependencies]
 futures = "0.3"

@@ -107,7 +107,11 @@ RFC 6713) and says so. **Decompression cannot recover the payload's media
 type** — neither container records one (gzip has a filename field, not a type) —
 so the caller states it with `as=`, defaulting to `application/octet-stream`.
 That is also the mechanism behind the transreptor half: a transreption step sets
-`as` to the type it asked for.
+`as` to the type it asked for, including parameters such as the charset in
+`text/plain; charset=utf-8`. The result stores those parameters in its
+`ReprType` alongside the base media type. Gzip transreption selects on
+`application/gzip` and operates on the container bytes. HTTP
+`Content-Encoding: gzip` is transport metadata.
 
 Algorithms ship here when they have **a registered media type and a pure-Rust
 implementation**: the transreptor half is media-type-addressed, so an algorithm
